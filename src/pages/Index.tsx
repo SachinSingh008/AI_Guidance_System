@@ -12,7 +12,7 @@ const Index = () => {
 
   useEffect(() => {
     checkUser();
-    
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
@@ -24,7 +24,7 @@ const Index = () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
       setUser(session.user);
-      
+
       // Check if user has a profile
       const { data: profile } = await supabase
         .from("user_profiles")
@@ -67,13 +67,13 @@ const Index = () => {
     <div className="min-h-screen">
       {/* Hero Section */}
       <section className="relative overflow-hidden">
-        <div 
+        <div
           className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `url(${heroImage})` }}
         >
           <div className="absolute inset-0 bg-gradient-to-br from-primary/90 via-primary/70 to-secondary/80" />
         </div>
-        
+
         <div className="relative max-w-7xl mx-auto px-4 py-24 sm:py-32">
           <div className="max-w-3xl">
             <h1 className="text-5xl sm:text-6xl font-bold text-white mb-6 animate-fade-in">
@@ -83,17 +83,16 @@ const Index = () => {
               Discover your perfect career path with personalized AI recommendations tailored to your engineering branch, skills, and aspirations.
             </p>
             <div className="flex flex-wrap gap-4 animate-fade-in" style={{ animationDelay: "0.2s" }}>
-              <Button 
-                size="lg" 
-                className="bg-white text-primary hover:bg-white/90 transition-all hover:scale-105"
+              <Button
+                size="lg"
+                className="bg-white text-primary hover:bg-white/90 transition-all hover:scale-105 shadow-lg"
                 onClick={() => navigate("/auth")}
               >
                 Get Started <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
-              <Button 
-                size="lg" 
-                variant="outline" 
-                className="border-white text-white hover:bg-white/10"
+              <Button
+                size="lg"
+                className="bg-white text-primary hover:bg-white/90 transition-all hover:scale-105 shadow-lg font-semibold"
                 onClick={() => navigate("/auth")}
               >
                 Sign In
@@ -119,8 +118,8 @@ const Index = () => {
             {features.map((feature, index) => {
               const Icon = feature.icon;
               return (
-                <Card 
-                  key={index} 
+                <Card
+                  key={index}
                   className="hover:shadow-xl transition-all duration-300 hover:scale-105 border-2"
                   style={{ animationDelay: `${index * 0.1}s` }}
                 >
@@ -149,8 +148,8 @@ const Index = () => {
           <p className="text-xl text-white/90 mb-8">
             Join thousands of engineering students who are building their futures with AI-powered guidance
           </p>
-          <Button 
-            size="lg" 
+          <Button
+            size="lg"
             className="bg-white text-primary hover:bg-white/90 transition-all hover:scale-105"
             onClick={() => navigate("/auth")}
           >

@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Loader2, LogOut, TrendingUp, BookOpen, Target } from "lucide-react";
+import { Loader2, LogOut, TrendingUp, BookOpen, Target, Settings } from "lucide-react";
+import resultsBackground from "@/assets/results-background.png";
 
 interface CareerRecommendation {
   id: string;
@@ -21,6 +22,7 @@ interface CareerRecommendation {
 
 const Results = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [recommendations, setRecommendations] = useState<CareerRecommendation[]>([]);
@@ -51,6 +53,9 @@ const Results = () => {
 
       setProfile(profileData);
 
+      // Check if we should force regeneration (e.g., after profile update)
+      const shouldRegenerate = searchParams.get('regenerate') === 'true';
+
       // Load existing recommendations
       const { data: recsData } = await supabase
         .from("career_recommendations")
@@ -58,11 +63,16 @@ const Results = () => {
         .eq("profile_id", profileData.id)
         .order("match_score", { ascending: false });
 
-      if (recsData && recsData.length > 0) {
-        setRecommendations(recsData);
-      } else {
+      if (shouldRegenerate || !recsData || recsData.length === 0) {
         // Generate new recommendations
         await generateRecommendations(profileData);
+        // Clear the regenerate parameter
+        if (shouldRegenerate) {
+          searchParams.delete('regenerate');
+          setSearchParams(searchParams, { replace: true });
+        }
+      } else {
+        setRecommendations(recsData);
       }
     } catch (error: any) {
       toast.error(error.message);
@@ -120,31 +130,44 @@ const Results = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10">
-      <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10">
+    <div className="min-h-screen relative overflow-hidden">
+      <div
+        className="fixed inset-0 bg-cover bg-center"
+        style={{ backgroundImage: `url(${resultsBackground})` }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/60 via-primary/40 to-secondary/50" />
+      </div>
+
+      <header className="border-b bg-background/90 backdrop-blur-md sticky top-0 z-10 relative">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             CareerGuide AI
           </h1>
-          <Button variant="outline" onClick={handleSignOut}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Sign Out
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate("/onboarding")} className="hover:scale-105 transition-transform">
+              <Settings className="h-4 w-4 mr-2" />
+              Reconfigure Profile
+            </Button>
+            <Button variant="outline" onClick={handleSignOut} className="hover:scale-105 transition-transform">
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign Out
+            </Button>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <main className="max-w-7xl mx-auto px-4 py-8 relative z-0">
         {profile && (
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold mb-2">Welcome, {profile.full_name}!</h2>
-            <p className="text-muted-foreground">
+          <div className="mb-8 animate-slide-up">
+            <h2 className="text-3xl font-bold mb-2 text-white drop-shadow-lg">Welcome, {profile.full_name}!</h2>
+            <p className="text-white/90 text-lg drop-shadow-md">
               {profile.branch.charAt(0).toUpperCase() + profile.branch.slice(1)} Engineering • Year {profile.current_year}
             </p>
           </div>
         )}
 
         {generating ? (
-          <Card className="mb-8">
+          <Card className="mb-8 backdrop-blur-lg bg-card/95 border-2 animate-slide-up">
             <CardContent className="pt-6 text-center">
               <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
               <p className="text-lg font-medium">Analyzing your profile...</p>
@@ -152,19 +175,19 @@ const Results = () => {
             </CardContent>
           </Card>
         ) : recommendations.length === 0 ? (
-          <Card>
+          <Card className="backdrop-blur-lg bg-card/95 border-2">
             <CardContent className="pt-6 text-center">
               <p className="mb-4">No recommendations yet</p>
-              <Button onClick={() => generateRecommendations(profile)}>
+              <Button onClick={() => generateRecommendations(profile)} className="hover:scale-105 transition-transform">
                 Generate Recommendations
               </Button>
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-6">
-            <h3 className="text-2xl font-bold">Your Career Paths</h3>
-            {recommendations.map((rec) => (
-              <Card key={rec.id} className="hover:shadow-lg transition-shadow">
+            <h3 className="text-2xl font-bold text-white drop-shadow-lg animate-slide-up">Your Career Paths</h3>
+            {recommendations.map((rec, index) => (
+              <Card key={rec.id} className="hover:shadow-2xl transition-all hover:scale-[1.02] backdrop-blur-lg bg-card/95 border-2 animate-slide-up" style={{ animationDelay: `${index * 0.1}s` }}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -172,7 +195,7 @@ const Results = () => {
                       <CardDescription>{rec.description}</CardDescription>
                     </div>
                     <div className="text-right">
-                      <div className="text-3xl font-bold text-primary">{rec.match_score}%</div>
+                      <div className="text-3xl font-bold text-primary animate-pulse-glow">{rec.match_score}%</div>
                       <div className="text-sm text-muted-foreground">Match</div>
                     </div>
                   </div>

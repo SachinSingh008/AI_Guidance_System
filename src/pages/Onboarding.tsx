@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Loader2, X } from "lucide-react";
+import onboardingBackground from "@/assets/onboarding-background.png";
 
 const BRANCHES = [
   { value: "computer", label: "Computer Engineering", icon: "💻" },
@@ -22,18 +23,20 @@ const Onboarding = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
-  
+
   // Form data
   const [fullName, setFullName] = useState("");
   const [branch, setBranch] = useState("");
   const [currentYear, setCurrentYear] = useState("");
   const [skills, setSkills] = useState<Array<{ name: string; level: string }>>([]);
   const [interests, setInterests] = useState<string[]>([]);
-  
+
   // Input states
   const [skillInput, setSkillInput] = useState("");
   const [skillLevel, setSkillLevel] = useState("beginner");
   const [interestInput, setInterestInput] = useState("");
+
+  const [existingProfileId, setExistingProfileId] = useState<string | null>(null);
 
   useEffect(() => {
     checkExistingProfile();
@@ -53,7 +56,31 @@ const Onboarding = () => {
       .single();
 
     if (profile) {
-      navigate("/results");
+      // Load existing profile data for editing
+      setExistingProfileId(profile.id);
+      setFullName(profile.full_name);
+      setBranch(profile.branch);
+      setCurrentYear(profile.current_year.toString());
+
+      // Load existing skills
+      const { data: skillsData } = await supabase
+        .from("user_skills")
+        .select("*")
+        .eq("profile_id", profile.id);
+
+      if (skillsData) {
+        setSkills(skillsData.map(s => ({ name: s.skill_name, level: s.skill_level })));
+      }
+
+      // Load existing interests
+      const { data: interestsData } = await supabase
+        .from("user_interests")
+        .select("*")
+        .eq("profile_id", profile.id);
+
+      if (interestsData) {
+        setInterests(interestsData.map(i => i.interest));
+      }
     }
   };
 
@@ -92,27 +119,51 @@ const Onboarding = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // Create profile
-      const { data: profile, error: profileError } = await supabase
-        .from("user_profiles")
-        .insert({
-          user_id: user.id,
-          full_name: fullName,
-          branch: branch as any,
-          current_year: parseInt(currentYear),
-        })
-        .select()
-        .single();
+      let profileId = existingProfileId;
 
-      if (profileError) throw profileError;
+      if (existingProfileId) {
+        // Update existing profile
+        const { error: profileError } = await supabase
+          .from("user_profiles")
+          .update({
+            full_name: fullName,
+            branch: branch as any,
+            current_year: parseInt(currentYear),
+          })
+          .eq("id", existingProfileId);
+
+        if (profileError) throw profileError;
+
+        // Delete existing skills and interests
+        await supabase.from("user_skills").delete().eq("profile_id", existingProfileId);
+        await supabase.from("user_interests").delete().eq("profile_id", existingProfileId);
+
+        // Delete existing recommendations to regenerate
+        await supabase.from("career_recommendations").delete().eq("profile_id", existingProfileId);
+      } else {
+        // Create new profile
+        const { data: profile, error: profileError } = await supabase
+          .from("user_profiles")
+          .insert({
+            user_id: user.id,
+            full_name: fullName,
+            branch: branch as any,
+            current_year: parseInt(currentYear),
+          })
+          .select()
+          .single();
+
+        if (profileError) throw profileError;
+        profileId = profile.id;
+      }
 
       // Insert skills
-      if (skills.length > 0) {
+      if (skills.length > 0 && profileId) {
         const { error: skillsError } = await supabase
           .from("user_skills")
           .insert(
             skills.map((skill) => ({
-              profile_id: profile.id,
+              profile_id: profileId,
               skill_name: skill.name,
               skill_level: skill.level as any,
             }))
@@ -122,12 +173,12 @@ const Onboarding = () => {
       }
 
       // Insert interests
-      if (interests.length > 0) {
+      if (interests.length > 0 && profileId) {
         const { error: interestsError } = await supabase
           .from("user_interests")
           .insert(
             interests.map((interest) => ({
-              profile_id: profile.id,
+              profile_id: profileId,
               interest: interest,
             }))
           );
@@ -135,8 +186,8 @@ const Onboarding = () => {
         if (interestsError) throw interestsError;
       }
 
-      toast.success("Profile created successfully!");
-      navigate("/results");
+      toast.success(existingProfileId ? "Profile updated successfully!" : "Profile created successfully!");
+      navigate(existingProfileId ? "/results?regenerate=true" : "/results");
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -145,18 +196,25 @@ const Onboarding = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4 py-12">
-      <div className="max-w-3xl mx-auto">
-        <div className="mb-8 text-center">
+    <div className="min-h-screen p-4 py-12 relative overflow-hidden">
+      <div
+        className="absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: `url(${onboardingBackground})` }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/70 via-primary/50 to-secondary/60" />
+      </div>
+
+      <div className="max-w-3xl mx-auto relative z-10">
+        <div className="mb-8 text-center animate-slide-up">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent mb-2">
-            Let's Get Started
+            {existingProfileId ? "Update Your Profile" : "Let's Get Started"}
           </h1>
-          <p className="text-muted-foreground">
-            Tell us about yourself to get personalized career recommendations
+          <p className="text-white/90 text-lg drop-shadow-lg">
+            {existingProfileId ? "Make changes to your profile and regenerate recommendations" : "Tell us about yourself to get personalized career recommendations"}
           </p>
         </div>
 
-        <Card className="shadow-xl">
+        <Card className="shadow-2xl backdrop-blur-lg bg-card/95 border-2 animate-slide-up" style={{ animationDelay: "0.1s" }}>
           <CardHeader>
             <CardTitle>Step {step} of 3</CardTitle>
             <CardDescription>
@@ -177,7 +235,7 @@ const Onboarding = () => {
                     placeholder="John Doe"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label>Engineering Branch *</Label>
                   <Select value={branch} onValueChange={setBranch}>
@@ -234,7 +292,7 @@ const Onboarding = () => {
                       <SelectItem value="expert">Expert</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Button onClick={addSkill} variant="secondary">Add</Button>
+                  <Button onClick={addSkill} variant="secondary" className="hover:scale-105 transition-transform">Add</Button>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
@@ -269,7 +327,7 @@ const Onboarding = () => {
                     placeholder="e.g., AI, Robotics, Construction, IoT"
                     onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addInterest())}
                   />
-                  <Button onClick={addInterest} variant="secondary">Add</Button>
+                  <Button onClick={addInterest} variant="secondary" className="hover:scale-105 transition-transform">Add</Button>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
@@ -297,17 +355,17 @@ const Onboarding = () => {
 
             <div className="flex gap-2 pt-4">
               {step > 1 && (
-                <Button variant="outline" onClick={() => setStep(step - 1)} className="flex-1">
+                <Button variant="outline" onClick={() => setStep(step - 1)} className="flex-1 hover:scale-105 transition-transform">
                   Previous
                 </Button>
               )}
               {step < 3 ? (
-                <Button onClick={() => setStep(step + 1)} className="flex-1">
+                <Button onClick={() => setStep(step + 1)} className="flex-1 hover:scale-105 transition-transform">
                   Next
                 </Button>
               ) : (
-                <Button onClick={handleSubmit} disabled={loading} className="flex-1">
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Get My Recommendations"}
+                <Button onClick={handleSubmit} disabled={loading} className="flex-1 hover:scale-105 transition-transform">
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : (existingProfileId ? "Update Profile" : "Get My Recommendations")}
                 </Button>
               )}
             </div>
